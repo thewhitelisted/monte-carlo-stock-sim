@@ -192,6 +192,40 @@ fn plot_heston(
     Ok(())
 }
 
+// calculate_var_95(price_paths) returns the var at a 95% confidence level
+// or an error message if it fails
+fn calculate_var_95(price_paths: &[Vec<f64>]) -> Result<f64, &'static str> {
+    if price_paths.is_empty() {
+        return Err("No price paths provided");
+    }
+
+    // calculate returns, sugoy epic higher order functions
+    let mut returns: Vec<f64> = price_paths
+                                    .iter()
+                                    .map(|p| {
+                                        let s0 = p[0];
+                                        let s1 = p[p.len() - 1];
+                                        return (s1 / s0) - 1.0;
+                                    }).collect();
+    
+    
+    // check for NaNs
+    if returns.iter().any(|r| r.is_nan()) {
+        return Err("Returns contain NaN values");
+    }
+
+    // sorted returns
+    returns.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    // get the idx for var cutoff and EDGE lmao
+    let index = (0.05 * returns.len() as f64).floor() as usize;
+    if index >= returns.len() {
+        return Err("Index out of bounds");
+    }
+
+    return Ok(returns[index].abs());
+}
+
 #[tokio::main]
 async fn main() {
     // parameters
@@ -218,6 +252,11 @@ async fn main() {
     // Print first 5 steps of first simulation
     println!("Price Path 1: {:?}", &price_paths[0][..5]);
     println!("Vol Path 1: {:?}", &vol_paths[0][..5]);
+
+    match calculate_var_95(&price_paths) {
+        Ok(var) => println!("95% VaR: {:.2}%", var * 100.0),
+        Err(e) => eprintln!("Failed to compute VaR: {}", e),
+    }
 
     // Plot results
     if let Err(e) = plot_heston(&price_paths, &vol_paths, 252) {
